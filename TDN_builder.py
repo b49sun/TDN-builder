@@ -69,6 +69,35 @@ def read_config_and_sequences(txt_path: str):
     
     return len_hinge, sequences_blocks[0], sequences_blocks[1], sequences_blocks[2], sequences_blocks[3]
 
+def strip_terminal_phosphate(pdb_path):
+    """
+    直接修改PDB文件：删除每条链第一个残基（residue sequence number = 1）
+    中的 P、OP1、OP2 原子（5'端磷酸基团），以避免 gromacs pdb2gmx 报错。
+    """
+    with open(pdb_path, 'r') as f:
+        lines = f.readlines()
+
+    cleaned = []
+    removed_count = 0
+    for line in lines:
+        if line.startswith(('ATOM', 'HETATM')):
+            # PDB 固定列格式（0-based index）：
+            # 12-15: atom name, 21: chain ID, 22-25: residue sequence number
+            atom_name = line[12:16].strip()
+            chain_id = line[21:22]
+            res_seq_str = line[22:26].strip()
+            
+            # 只删链 A/B/C/D 中残基序号为 1 的 P / OP1 / OP2
+            if chain_id in 'ABCD' and res_seq_str == '1' and atom_name in ('P', 'OP1', 'OP2'):
+                removed_count += 1
+                continue
+        cleaned.append(line)
+
+    with open(pdb_path, 'w') as f:
+        f.writelines(cleaned)
+    
+    if removed_count:
+        print(f"[Clean] Removed {removed_count} terminal phosphate atoms from {pdb_path}")
 
 def auto_assign_sequences(seq_a: str, raw_seqs: list, ignore_last_bases: int):
     """自动分配B、C、D（匹配A[0],A[1],A[2]）"""
@@ -651,7 +680,7 @@ def build_tetrahedron(sequences: dict, L: float, edge_rots: list,
         sele = list(chain.get_residues())
         rotate_around_axis(sele, 70.53, axis_vec, start)
         rotate_around_axis(sele, 180., axis_vec2, A)
-    
+
     io = PDBIO()
     io.set_structure(st12)
     total_loss = check_geometry(st12, res_per_seg=seg_len, nedge=3)
@@ -792,7 +821,7 @@ if __name__ == "__main__":
             os.rename(tmp_pdb, final_pdb)
     else:
         os.rename(tmp_pdb, final_pdb)
-    
+    strip_terminal_phosphate(final_pdb)
     b = time.time()
     
     # 6. 输出最终信息
@@ -804,7 +833,7 @@ if __name__ == "__main__":
     #else:
         #print(f"  使用原始配置（未优化）")
     #print(f"{'='*60}")
-
+    
     print(f"\ntotal_loss={total_loss}")
     print(f"total time: {round(b-a, 3)}s")
     print(f"output file: {final_pdb}")
