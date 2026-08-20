@@ -69,6 +69,42 @@ def read_config_and_sequences(txt_path: str):
     
     return len_hinge, sequences_blocks[0], sequences_blocks[1], sequences_blocks[2], sequences_blocks[3]
 
+def fix_ter_placement(pdb_path):
+    """
+    修复 PDB 中 TER 记录位置：确保每条链的 TER 紧跟在该链原子之后，
+    而不是被集中到文件末尾（rearrangeDNA_v2 的副作用）。
+    """
+    chain_atoms = {}
+    ter_records = {}
+    other_lines = []
+
+    with open(pdb_path, 'r') as f:
+        for line in f:
+            if line.startswith(('ATOM  ', 'HETATM')):
+                cid = line[21]
+                chain_atoms.setdefault(cid, []).append(line)
+            elif line.startswith('TER'):
+                cid = line[21]
+                ter_records[cid] = line
+            else:
+                other_lines.append(line)
+
+    atom_serial = 1
+    with open(pdb_path, 'w') as f:
+        for cid in sorted(chain_atoms.keys()):
+            for line in chain_atoms[cid]:
+                new_line = line[:6] + f"{atom_serial:5d}" + line[11:]
+                f.write(new_line)
+                atom_serial += 1
+            if cid in ter_records:
+                ter_line = ter_records[cid]
+                new_ter = ter_line[:6] + f"{atom_serial:5d}" + ter_line[11:]
+                f.write(new_ter)
+                atom_serial += 1
+        for line in other_lines:
+            f.write(line)
+
+
 def strip_terminal_phosphate(pdb_path):
     """
     直接修改PDB文件：删除每条链第一个残基（residue sequence number = 1）
@@ -822,6 +858,7 @@ if __name__ == "__main__":
     else:
         os.rename(tmp_pdb, final_pdb)
     strip_terminal_phosphate(final_pdb)
+    fix_ter_placement(final_pdb)
     b = time.time()
     
     # 6. 输出最终信息
