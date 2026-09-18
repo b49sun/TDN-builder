@@ -806,7 +806,7 @@ if __name__ == "__main__":
     
     # 3. 验证拓扑
     try:
-        from pair_DNA_tetrahedron import TetrahedronCore
+        from pair_DNA_tetrahedron_v2 import TetrahedronCore
         core = TetrahedronCore(seqs, ignore_last_bases=len_hinge, verbose=False)
         ass = core.validate_edges()
         print(f"\nsequences paired! (hinge={len_hinge})")
