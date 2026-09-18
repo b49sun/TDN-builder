@@ -139,7 +139,7 @@ def auto_assign_sequences(seq_a: str, raw_seqs: list, ignore_last_bases: int):
     """自动分配B、C、D（匹配A[0],A[1],A[2]）"""
     L = len(seq_a)
     if L % 3 != 0:
-        raise ValueError(f"A链长度{L}不是3的倍数")
+        raise ValueError(f"length of chain A {L}is not multiple of 3")
     
     seg_len = L // 3
     a_segments_full = [seq_a[i*seg_len:(i+1)*seg_len] for i in range(3)]
@@ -183,7 +183,7 @@ def auto_assign_sequences(seq_a: str, raw_seqs: list, ignore_last_bases: int):
                 break
         
         if found is None:
-            raise ValueError(f"无法为A[{a_seg_idx}]找到互补段")
+            raise ValueError(f"Can't find complementary for segment A[{a_seg_idx}]")
         
         cand_idx, matched_seg = found
         assignment[a_seg_idx] = {'raw_idx': cand_idx, 'matched_seg_idx': matched_seg}
@@ -207,7 +207,7 @@ def Cn_rotate(structure, n: int, axis: Vector, p0: Vector = Vector(0, 0, 0)) -> 
     if hasattr(structure, '__getitem__') and not isinstance(structure, list):
         structure = list(structure)
     if len(structure) % n:
-        raise ValueError('残基数必须能被 n 整除')
+        raise ValueError('residue number must be a multiple of n')
     
     total_res = len(structure)
     res_per_seg = total_res // n
@@ -242,7 +242,7 @@ def rotate_head_alpha(residues, theta_deg, n=1):
     theta = -math.radians(theta_deg)
     nres = len(residues)
     if n <= 0 or n > nres - 1:
-        raise ValueError("n 必须满足 1 ≤ n ≤ len(residues)-1")
+        raise ValueError("n must be greater than 1 and smaller than len(residues)")
     for k in range(n):
         bend_at = k
         atom_P  = residues[bend_at]['P']
@@ -267,7 +267,7 @@ def rotate_head_gamma(residues, theta_deg, n=1):
     theta = -math.radians(theta_deg)
     nres = len(residues)
     if n <= 0 or n > nres:
-        raise ValueError("n 必须满足 1 ≤ n ≤ len(residues)")
+        raise ValueError("n must be greater than 1 and smaller than len(residues)")
     for k in range(n):
         bend_at = k
         atom_C5 = residues[bend_at]['C5\'']
@@ -292,7 +292,7 @@ def rotate_head_zeta(residues, theta_deg, n=1):
     theta = -math.radians(theta_deg)
     nres = len(residues)
     if n <= 0 or n > nres - 1:
-        raise ValueError("n 必须满足 1 ≤ n ≤ len(residues)-1")
+        raise ValueError("n must be greater than 1 and smaller than len(residues)")
     for k in range(n):
         bend_at = k + 1
         atom_O3 = residues[bend_at]['O3\'']
@@ -315,7 +315,7 @@ def rotate_head_epsilon(residues, theta_deg, n=1):
     theta = -math.radians(theta_deg)
     nres = len(residues)
     if n <= 0 or n > nres:
-        raise ValueError("n 必须满足 1 ≤ n ≤ len(residues)")
+        raise ValueError("n must be greater than 1 and smaller than len(residues)")
     for k in range(n):
         bend_at = k
         atom_C3 = residues[bend_at]['C3\'']
@@ -338,7 +338,7 @@ def rotate_alpha(residues, theta_deg, n=1):
     theta = -math.radians(theta_deg)
     nres = len(residues)
     if n <= 0 or n > nres - 1:
-        raise ValueError("n 必须满足 1 ≤ n ≤ len(residues)-1")
+        raise ValueError("n must be greater than 1 and smaller than len(residues)")
     for k in range(1, n + 1):
         bend_at = nres - k - 1
         atom_P  = residues[bend_at]['P']
@@ -363,7 +363,7 @@ def rotate_gamma(residues, theta_deg, n=1):
     theta = -math.radians(theta_deg)
     nres = len(residues)
     if n <= 0 or n > nres:
-        raise ValueError("n 必须满足 1 ≤ n ≤ len(residues)")
+        raise ValueError("n must be greater than 1 and smaller than len(residues)")
     for k in range(1, n + 1):
         bend_at = nres - k
         atom_C5 = residues[bend_at]['C5\'']
@@ -388,7 +388,7 @@ def rotate_zeta(residues, theta_deg, n=1):
     theta = -math.radians(theta_deg)
     nres = len(residues)
     if n <= 0 or n > nres - 1:
-        raise ValueError("n 必须满足 1 ≤ n ≤ len(residues)-1")
+        raise ValueError("n must be greater than 1 and smaller than len(residues)")
     for k in range(1, n + 1):
         bend_at = nres - k
         atom_O3 = residues[bend_at]['O3\'']
@@ -413,7 +413,7 @@ def rotate_epsilon(residues, theta_deg, n=1):
     theta = -math.radians(theta_deg)
     nres = len(residues)
     if n <= 0 or n > nres:
-        raise ValueError("n 必须满足 1 ≤ n ≤ len(residues)")
+        raise ValueError("n must be greater than 1 and smaller than len(residues)")
     for k in range(1, n + 1):
         bend_at = nres - k
         atom_C3 = residues[bend_at]['C3\'']
@@ -603,7 +603,7 @@ def build_tetrahedron(sequences: dict, L: float, edge_rots: list,
             dz = 3.38 * 1###这里记得修改
         if len_hinge == 2 or len_hinge == 4:
             dz = 0
-        dphi = -85/2 + 36*(seg_len-3)###这里记得修改
+        dphi = -85/2 + 36*(seg_len-3)
         #print(dphi-360*(dphi//360))
         #print(seg_len)
         comp_map = {}
