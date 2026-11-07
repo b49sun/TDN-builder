@@ -601,7 +601,7 @@ def build_tetrahedron(sequences: dict, L: float, edge_rots: list,
         z_axis = Vector(0, 0, 1)
         if len_hinge == 1 or len_hinge == 3:
             dz = 3.38 * 1###这里记得修改
-        if len_hinge == 2 or len_hinge == 4:
+        if len_hinge == 0 or len_hinge == 2 or len_hinge == 4:
             dz = 0
         dphi = -85/2 + 36*(seg_len-3)###这里记得修改
         #print(dphi-360*(dphi//360))
