@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-DNA 四面体 V2 版本
+DNA 四面体 V2 版本：最小改动回溯匹配
 输出：修正链（从匹配区开始）和剪切位置（修正链[0]在原始链中的位置）
 """
 import numpy as np
@@ -11,7 +11,7 @@ class ValidationError(Exception):
 
 class TetrahedronCore:
     """
-    V2核心类 - 修复版：构建所有6条边
+    V2核心类：保留V2拓扑规则，增加匹配回溯搜索
     """
     
     # 所有6条边
@@ -64,187 +64,185 @@ class TetrahedronCore:
         """无向边名称（排序）"""
         return ''.join(sorted([v1, v2]))
     
-    def find_complementary_segment(self, target_seq: str, search_ch: str, head_offset: int = 0) -> Optional[Tuple[int, int]]:
-        """
-        寻找互补段
-        head_offset: 头部hinge碱基数，用于调整匹配起始位置
-                    hinge=1时为0，hinge=3时为1
-        """
+    def find_complementary_segments(self, target_seq: str, search_ch: str, head_offset: int = 0) -> List[Tuple[int, int]]:
+        """Return every circular match position for a target sequence."""
         extended = self.extended_seqs[search_ch]
-    
-        if target_seq not in extended:
-            return None
-    
-        start = extended.index(target_seq)
-        # 调整起始位置：往前推head_offset个碱基，包含头部hinge
-        adjusted_start = (start - head_offset) % self.L
-        orig_start = adjusted_start % self.L
-    
-        return (orig_start, len(target_seq))
-    
-    def try_partition(self, cut1: int) -> Optional[Dict]:
-        """尝试A链在cut1处开口 - 强制使用 head_tail 模式"""
-        seq_a = self.seq_a_original
-        L = self.L
-        seg_len = self.seg_len
-        
-        # 强制使用 head_tail 模式
+        matches = []
+        seen = set()
+        # A valid circular start is restricted to the original strand (0..L-1).
+        for start in range(self.L):
+            if extended[start:start + len(target_seq)] == target_seq:
+                adjusted_start = (start - head_offset) % self.L
+                item = (adjusted_start, len(target_seq))
+                if item not in seen:
+                    matches.append(item)
+                    seen.add(item)
+        return matches
+
+    def find_complementary_segment(self, target_seq: str, search_ch: str, head_offset: int = 0) -> Optional[Tuple[int, int]]:
+        """Backward-compatible helper: return the first match, if any."""
+        matches = self.find_complementary_segments(target_seq, search_ch, head_offset)
+        return matches[0] if matches else None
+
+    def _hinge_offsets(self) -> Tuple[int, int]:
         if self.ignore_last_bases == 1:
-            head, tail = 0, 1
-        elif self.ignore_last_bases == 2:
-            head, tail = 1, 1  # 均分
-        elif self.ignore_last_bases == 3:
-            head, tail = 1, 2
-        elif self.ignore_last_bases == 4:
-            head, tail = 2, 2
-        else:
-            head, tail = 0, self.ignore_last_bases
-        
-        # A链剪切位置往后推head个碱基
-        adjusted_cut1 = (cut1 + head) % L
-        
-        # A链三段（从adjusted_cut1开始的循环序列）
-        new_seq = seq_a[adjusted_cut1:] + seq_a[:adjusted_cut1]
-        seg_a0_full = new_seq[0:seg_len]
-        seg_a1_full = new_seq[seg_len:2*seg_len]
-        seg_a2_full = new_seq[2*seg_len:]
-        
-        # 用于匹配的序列（去掉头部和尾部hinge区）
-        if head > 0 or tail > 0:
-            seg_a0 = seg_a0_full[head:-tail] if len(seg_a0_full) > (head + tail) else ""
-            seg_a1 = seg_a1_full[head:-tail] if len(seg_a1_full) > (head + tail) else ""
-            seg_a2 = seg_a2_full[head:-tail] if len(seg_a2_full) > (head + tail) else ""
-        else:
-            seg_a0, seg_a1, seg_a2 = seg_a0_full, seg_a1_full, seg_a2_full
-        
-        # 为每段寻找互补链
-        available = list(self.candidate_seqs_original.keys())
-        assignment = {}
-        dynamic_names = {}
-        
-        for a_idx in range(3):
-            target_rev = self._revc([seg_a0, seg_a1, seg_a2][a_idx])
-            found = False
-            
-            for ch in available[:]:
-                result = self.find_complementary_segment(target_rev, ch, head_offset=head)
-                if result is not None:
-                    match_start, match_len = result
-                    assignment[a_idx] = (ch, match_start, match_len)
-                    dynamic_names[a_idx] = ['B', 'C', 'D'][a_idx]
-                    available.remove(ch)
-                    found = True
-                    break
-            
-            if not found:
-                return None
-        
-        # ==================== 新增验证：B/C/D链之间的三条边 ====================
-        
-        # 构建B/C/D链的段信息
-        bcd_info = {}  # {动态链名: 详细信息}
-        
-        for a_idx, (orig_ch, match_start, match_len) in assignment.items():
-            seq_original = self.candidate_seqs_original[orig_ch]
-            # 修正链：从match_start开始
-            corrected_seq = seq_original[match_start:] + seq_original[:match_start]
-            dyn_name = dynamic_names[a_idx]
-            
-            # 修正链的三段（每段包含hinge）
-            seg0 = corrected_seq[0:seg_len]
-            seg1 = corrected_seq[seg_len:2*seg_len]
-            seg2 = corrected_seq[2*seg_len:]
-            
-            # 用于匹配的三段（去掉hinge）
+            return 0, 1
+        if self.ignore_last_bases == 2:
+            return 1, 1
+        if self.ignore_last_bases == 3:
+            return 1, 2
+        if self.ignore_last_bases == 4:
+            return 2, 2
+        return 0, self.ignore_last_bases
+
+    def _candidate_passes_edge_checks(self, assignment: Dict[int, Tuple[str, int, int]],
+                                      dynamic_names: Dict[int, str],
+                                      head: int, tail: int,
+                                      a_sequence: str) -> bool:
+        """Validate the six *designated* tetrahedral edges for this candidate.
+
+        The corrected chain for each B/C/D candidate starts at its A-matching
+        segment. Therefore segment 0 of each corrected B/C/D chain must pair
+        with the corresponding A segment. The remaining four edge pairings
+        are fixed by the tetrahedral strand connectivity:
+
+            EF: A[0] -- B[0]       EH: B[1] -- D[2]
+            FG: A[1] -- C[0]       FH: B[2] -- C[1]
+            GE: A[2] -- D[0]       GH: C[2] -- D[1]
+
+        This replaces the former permissive "matches any other segment" test.
+        It deliberately checks the exact partner prescribed by the topology.
+        """
+        seg_len = self.seg_len
+
+        # Reconstruct the exact corrected sequences associated with this
+        # candidate assignment. Do not infer edge partners from arbitrary
+        # sequence matches elsewhere in the other chains.
+        corrected = {'A': a_sequence}
+        for a_idx, (orig_ch, match_start, _match_len) in assignment.items():
+            original = self.candidate_seqs_original[orig_ch]
+            corrected[dynamic_names[a_idx]] = (
+                original[match_start:] + original[:match_start]
+            )
+
+        if set(corrected) != {'A', 'B', 'C', 'D'}:
+            return False
+        if any(len(seq) != self.L for seq in corrected.values()):
+            return False
+
+        # Split each corrected strand into its three consecutive segments,
+        # then remove the hinge nucleotides using the same convention as the
+        # A-chain matching step.
+        segments = {}
+        for chain_name, sequence in corrected.items():
+            full_segments = [
+                sequence[:seg_len],
+                sequence[seg_len:2 * seg_len],
+                sequence[2 * seg_len:3 * seg_len],
+            ]
             if head > 0 or tail > 0:
-                match_seg0 = seg0[head:-tail] if len(seg0) > (head + tail) else ""
-                match_seg1 = seg1[head:-tail] if len(seg1) > (head + tail) else ""
-                match_seg2 = seg2[head:-tail] if len(seg2) > (head + tail) else ""
+                match_segments = [
+                    segment[head:-tail]
+                    if len(segment) > head + tail else ''
+                    for segment in full_segments
+                ]
             else:
-                match_seg0, match_seg1, match_seg2 = seg0, seg1, seg2
-            
-            # 确定与A匹配的段索引
-            # match_start是原始链中的位置，需要映射到修正链的段索引
-            # 修正链从match_start开始，所以原始链的match_start位置现在是修正链的0位置
-            # 因此，与A匹配的是修正链的段0
-            matched_idx_in_corrected = 0  # 修正链的段0与A匹配
-            
-            # 计算另外两段在原始链中的位置
-            other_segs = []
-            for idx in range(3):
-                if idx == matched_idx_in_corrected:
-                    continue
-                start_in_corrected = idx * seg_len
-                end_in_corrected = (idx + 1) * seg_len
-                # 映射回原始链
-                start_in_original = (match_start + start_in_corrected) % L
-                end_in_original = (match_start + end_in_corrected) % L
-                other_segs.append({
-                    'corrected_idx': idx,
-                    'start_orig': start_in_original,
-                    'end_orig': end_in_original,
-                    'match_seq': [match_seg0, match_seg1, match_seg2][idx]
-                })
-            
-            bcd_info[dyn_name] = {
-                'orig_ch': orig_ch,
-                'match_start': match_start,
-                'corrected_seq': corrected_seq,
-                'full_segs': [seg0, seg1, seg2],
-                'match_segs': [match_seg0, match_seg1, match_seg2],
-                'matched_idx': matched_idx_in_corrected,
-                'other_segs': other_segs
-            }
-        
-        # 验证B/C/D之间的三条边
-        bcd_names = ['B', 'C', 'D']
-        
-        for i, name in enumerate(bcd_names):
-            current = bcd_info[name]
-            other_names = [n for n in bcd_names if n != name]
-            
-            for seg_info in current['other_segs']:
-                idx = seg_info['corrected_idx']
-                match_seq = seg_info['match_seq']
-                target_rev = self._revc(match_seq)
-                
-                # 检查是否能与另外两条链的某段互补
-                found_match = False
-                for other_name in other_names:
-                    other_info = bcd_info[other_name]
-                    for other_idx, other_match_seq in enumerate(other_info['match_segs']):
-                        if other_idx == other_info['matched_idx']:
-                            continue  # 跳过与A匹配的段
-                        if other_match_seq == target_rev:
-                            found_match = True
-                            break
-                    if found_match:
-                        break
-                
-                if not found_match:
-                    #print(f"    -> 未找到匹配!")
-                    return None
-        
-        # 构建修正链和剪切位置
-        corrected_seqs = {'A': new_seq}
-        cut_positions = {'A': adjusted_cut1}
-        
-        for a_idx, (orig_ch, match_start, match_len) in assignment.items():
-            seq_original = self.candidate_seqs_original[orig_ch]
-            corrected_seq = seq_original[match_start:] + seq_original[:match_start]
-            dyn_name = dynamic_names[a_idx]
-            corrected_seqs[dyn_name] = corrected_seq
-            cut_positions[dyn_name] = match_start
-        
-        cut2 = (adjusted_cut1 + seg_len) % L
-        return {
-            'cuts': (adjusted_cut1, cut2),
-            'assignment': assignment,
-            'dynamic_names': dynamic_names,
-            'corrected_sequences': corrected_seqs,
-            'cut_positions': cut_positions
+                match_segments = full_segments
+
+            if any(not segment for segment in match_segments):
+                return False
+            segments[chain_name] = match_segments
+
+        # Exact edge-to-segment topology. Each tuple identifies
+        # (chain, segment_index) for the two strands forming that edge.
+        expected_edges = {
+            'EF': (('A', 0), ('B', 0)),
+            'FG': (('A', 1), ('C', 0)),
+            'GE': (('A', 2), ('D', 0)),
+            'EH': (('B', 1), ('D', 2)),
+            'FH': (('B', 2), ('C', 1)),
+            'GH': (('C', 2), ('D', 1)),
         }
-    
+
+        # Every edge must contain exactly its designated pair, and the two
+        # segments must be exact reverse complements of one another.
+        for edge_name, ((chain_1, index_1), (chain_2, index_2)) in expected_edges.items():
+            seq_1 = segments[chain_1][index_1]
+            seq_2 = segments[chain_2][index_2]
+            if len(seq_1) != len(seq_2):
+                return False
+            if self._revc(seq_1) != seq_2:
+                return False
+
+        # Retain an explicit six-edge occupancy sanity check. This guards
+        # against accidental omissions if the topology table is edited later.
+        edge_data = {edge_name: [] for edge_name in self.ALL_EDGES}
+        for edge_name, pair in expected_edges.items():
+            edge_data[edge_name].extend(pair)
+        return all(len(pair) == 2 for pair in edge_data.values())
+
+    def try_partition(self, cut1: int) -> Optional[Dict]:
+        """Try candidate matches with backtracking; return the first fully valid one."""
+        seq_a, L, seg_len = self.seq_a_original, self.L, self.seg_len
+        head, tail = self._hinge_offsets()
+        adjusted_cut1 = (cut1 + head) % L
+        new_seq = seq_a[adjusted_cut1:] + seq_a[:adjusted_cut1]
+        full_a = [new_seq[:seg_len], new_seq[seg_len:2 * seg_len], new_seq[2 * seg_len:]]
+        if head > 0 or tail > 0:
+            match_a = [s[head:-tail] if len(s) > head + tail else '' for s in full_a]
+        else:
+            match_a = full_a
+        if any(not s for s in match_a):
+            return None
+
+        # Collect all candidate matches for each A segment before assigning chains.
+        options = []
+        for a_idx in range(3):
+            target_rev = self._revc(match_a[a_idx])
+            candidates = []
+            for ch in self.candidate_seqs_original:
+                for match_start, match_len in self.find_complementary_segments(
+                        target_rev, ch, head_offset=head):
+                    candidates.append((ch, match_start, match_len))
+            if not candidates:
+                return None
+            options.append(candidates)
+
+        dynamic_names = {0: 'B', 1: 'C', 2: 'D'}
+        assignment = {}
+
+        def search(a_idx: int, used_chains: set):
+            if a_idx == 3:
+                if not self._candidate_passes_edge_checks(assignment, dynamic_names, head, tail, new_seq):
+                    return None
+
+                corrected_seqs = {'A': new_seq}
+                cut_positions = {'A': adjusted_cut1}
+                for idx, (orig_ch, match_start, _) in assignment.items():
+                    original = self.candidate_seqs_original[orig_ch]
+                    corrected_seqs[dynamic_names[idx]] = original[match_start:] + original[:match_start]
+                    cut_positions[dynamic_names[idx]] = match_start
+
+                return {
+                    'cuts': (adjusted_cut1, (adjusted_cut1 + seg_len) % L),
+                    'assignment': dict(assignment),
+                    'dynamic_names': dict(dynamic_names),
+                    'corrected_sequences': corrected_seqs,
+                    'cut_positions': cut_positions
+                }
+
+            for ch, match_start, match_len in options[a_idx]:
+                if ch in used_chains:
+                    continue
+                assignment[a_idx] = (ch, match_start, match_len)
+                result = search(a_idx + 1, used_chains | {ch})
+                if result is not None:
+                    return result
+                del assignment[a_idx]
+            return None
+
+        return search(0, set())
+
     def find_all_valid_partitions(self) -> List[Dict]:
         """遍历cut1从0到seg_len-1"""
         valid = []
